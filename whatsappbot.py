@@ -63,7 +63,7 @@ def webhook():
         ai_response = requests.post(
             "https://api.llama.com/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {LLAMA_API_KEY}",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             },
             json={
