@@ -10,7 +10,7 @@ app = Flask(__name__)
 META_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_ID = os.getenv("META_PHONE_NUMBER_ID")
 VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
-LLAMA_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
 # -----------------------------
