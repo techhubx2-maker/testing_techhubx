@@ -5,9 +5,9 @@ from flask import Flask, request
 app = Flask(__name__)
 
 
-# ==========================================
+# =========================================================
 # ENVIRONMENT VARIABLES
-# ==========================================
+# =========================================================
 
 META_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_ID = os.getenv("META_PHONE_NUMBER_ID")
@@ -15,9 +15,9 @@ VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
-# ==========================================
+# =========================================================
 # HOME
-# ==========================================
+# =========================================================
 
 @app.route("/", methods=["GET"])
 def home():
@@ -25,9 +25,9 @@ def home():
     return "WhatsApp AI Bot is Live!", 200
 
 
-# ==========================================
+# =========================================================
 # META WEBHOOK VERIFY
-# ==========================================
+# =========================================================
 
 @app.route("/webhook", methods=["GET"])
 def verify():
@@ -49,9 +49,9 @@ def verify():
     return "Verification failed", 403
 
 
-# ==========================================
+# =========================================================
 # RECEIVE WHATSAPP MESSAGE
-# ==========================================
+# =========================================================
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -62,44 +62,87 @@ def webhook():
 
     try:
 
-        # --------------------------------------
-        # GET MESSAGE
-        # --------------------------------------
+        # =================================================
+        # GET VALUE
+        # =================================================
 
-        message = data["entry"][0]["changes"][0]["value"]["messages"][0]
+        value = data["entry"][0]["changes"][0]["value"]
+
+
+        # =================================================
+        # IMPORTANT:
+        # IGNORE STATUS WEBHOOKS
+        # =================================================
+
+        if "messages" not in value:
+
+            print(
+                "NO MESSAGE FOUND - STATUS/EVENT WEBHOOK",
+                flush=True
+            )
+
+            return "OK", 200
+
+
+        # =================================================
+        # GET WHATSAPP MESSAGE
+        # =================================================
+
+        message = value["messages"][0]
 
         sender = message["from"]
 
-        user_text = message.get("text", {}).get("body", "").strip()
+        user_text = message.get(
+            "text",
+            {}
+        ).get(
+            "body",
+            ""
+        ).strip()
 
-        print("USER:", user_text, flush=True)
+
+        print(
+            "USER:",
+            user_text,
+            flush=True
+        )
 
 
-        # --------------------------------------
-        # IGNORE NON-TEXT MESSAGE
-        # --------------------------------------
+        # =================================================
+        # IGNORE NON-TEXT MESSAGES
+        # =================================================
 
         if not user_text:
 
+            print(
+                "NON-TEXT MESSAGE - IGNORED",
+                flush=True
+            )
+
             return "OK", 200
 
 
-        # ======================================
+        # =================================================
         # CHECK GROQ API KEY
-        # ======================================
+        # =================================================
 
         if not GROQ_API_KEY:
 
-            print("ERROR: GROQ_API_KEY IS MISSING", flush=True)
+            print(
+                "ERROR: GROQ_API_KEY IS MISSING",
+                flush=True
+            )
 
             return "OK", 200
 
 
-        # ======================================
-        # SEND USER MESSAGE TO GROQ AI
-        # ======================================
+        # =================================================
+        # GROQ API
+        # =================================================
 
-        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        groq_url = (
+            "https://api.groq.com/openai/v1/chat/completions"
+        )
 
 
         groq_headers = {
@@ -111,9 +154,13 @@ def webhook():
         }
 
 
+        # =================================================
+        # FREE / FAST GROQ MODEL
+        # =================================================
+
         groq_data = {
 
-            "model": "llama-3.3-70b-versatile",
+            "model": "llama-3.1-8b-instant",
 
             "messages": [
 
@@ -121,18 +168,20 @@ def webhook():
                     "role": "system",
 
                     "content": (
-                        "You are a helpful WhatsApp customer support "
-                        "assistant for TechHubX Digital Solutions. "
+                        "You are a helpful WhatsApp customer "
+                        "support assistant for TechHubX "
+                        "Digital Solutions. "
 
-                        "Answer customer questions clearly and "
+                        "Reply clearly, naturally and "
                         "professionally. "
 
-                        "Keep replies short and useful. "
+                        "Keep responses short and useful. "
 
                         "If the customer says hi, hello or hii, "
-                        "reply naturally and ask how you can help. "
+                        "greet them naturally and ask how you "
+                        "can help. "
 
-                        "Do not mention that you are an AI unless "
+                        "Do not say that you are an AI unless "
                         "the customer asks."
                     )
                 },
@@ -153,8 +202,15 @@ def webhook():
         }
 
 
-        print("SENDING MESSAGE TO GROQ...", flush=True)
+        print(
+            "SENDING MESSAGE TO GROQ...",
+            flush=True
+        )
 
+
+        # =================================================
+        # CALL GROQ
+        # =================================================
 
         ai_response = requests.post(
 
@@ -169,16 +225,15 @@ def webhook():
         )
 
 
-        # ======================================
-        # GROQ RESPONSE
-        # ======================================
+        # =================================================
+        # GROQ LOGS
+        # =================================================
 
         print(
             "GROQ STATUS:",
             ai_response.status_code,
             flush=True
         )
-
 
         print(
             "GROQ RESPONSE:",
@@ -187,9 +242,9 @@ def webhook():
         )
 
 
-        # ======================================
-        # CHECK GROQ ERROR
-        # ======================================
+        # =================================================
+        # GROQ ERROR
+        # =================================================
 
         if ai_response.status_code != 200:
 
@@ -202,14 +257,21 @@ def webhook():
             return "OK", 200
 
 
-        # ======================================
-        # GET AI RESPONSE TEXT
-        # ======================================
+        # =================================================
+        # GET AI RESPONSE
+        # =================================================
 
         ai_data = ai_response.json()
 
 
-        reply = ai_data["choices"][0]["message"]["content"]
+        reply = (
+            ai_data
+            ["choices"]
+            [0]
+            ["message"]
+            ["content"]
+            .strip()
+        )
 
 
         print(
@@ -219,9 +281,9 @@ def webhook():
         )
 
 
-        # ======================================
+        # =================================================
         # SEND AI REPLY TO WHATSAPP
-        # ======================================
+        # =================================================
 
         meta_url = (
             f"https://graph.facebook.com/v23.0/"
@@ -274,9 +336,9 @@ def webhook():
         )
 
 
-        # ======================================
+        # =================================================
         # META RESPONSE
-        # ======================================
+        # =================================================
 
         print(
             "META STATUS:",
@@ -284,12 +346,24 @@ def webhook():
             flush=True
         )
 
-
         print(
             "META RESPONSE:",
             meta_response.text,
             flush=True
         )
+
+
+        # =================================================
+        # META ERROR
+        # =================================================
+
+        if meta_response.status_code >= 400:
+
+            print(
+                "META ERROR:",
+                meta_response.text,
+                flush=True
+            )
 
 
     except Exception as e:
@@ -304,9 +378,9 @@ def webhook():
     return "OK", 200
 
 
-# ==========================================
-# RUN APPLICATION
-# ==========================================
+# =========================================================
+# RUN
+# =========================================================
 
 if __name__ == "__main__":
 
@@ -317,11 +391,7 @@ if __name__ == "__main__":
         )
     )
 
-
     app.run(
-
         host="0.0.0.0",
-
         port=port
-
     )
