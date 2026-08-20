@@ -5,12 +5,11 @@ from flask import Flask, request
 app = Flask(__name__)
 
 # =============================
-# ENVIRONMENT VARIABLES
+# META ENVIRONMENT VARIABLES
 # =============================
 META_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_ID = os.getenv("META_PHONE_NUMBER_ID")
 VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
 # =============================
@@ -18,7 +17,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # =============================
 @app.route("/", methods=["GET"])
 def home():
-    return "WhatsApp AI Bot is Live!"
+    return "WhatsApp Bot is Live!", 200
 
 
 # =============================
@@ -31,9 +30,13 @@ def verify():
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
+    print("WEBHOOK VERIFY:", flush=True)
+
     if mode == "subscribe" and token == VERIFY_TOKEN:
+        print("WEBHOOK VERIFIED", flush=True)
         return challenge, 200
 
+    print("WEBHOOK VERIFICATION FAILED", flush=True)
     return "Verification failed", 403
 
 
@@ -50,7 +53,7 @@ def webhook():
     try:
 
         # -----------------------------
-        # GET MESSAGE
+        # GET WHATSAPP MESSAGE
         # -----------------------------
         message = data["entry"][0]["changes"][0]["value"]["messages"][0]
 
@@ -60,108 +63,25 @@ def webhook():
 
         print("USER:", user_text, flush=True)
 
+
+        # -----------------------------
+        # IGNORE NON-TEXT MESSAGES
+        # -----------------------------
         if not user_text:
             return "OK", 200
 
 
-        # -----------------------------
-        # CHECK GROQ KEY
-        # -----------------------------
-        if not GROQ_API_KEY:
+        # =============================
+        # FIXED REPLY
+        # =============================
+        reply = "Hi 👋 Welcome to TechHubX Digital Solutions! How can we help you?"
 
-            print("ERROR: GROQ_API_KEY is missing", flush=True)
 
-            return "OK", 200
+        print("REPLY:", reply, flush=True)
 
 
         # =============================
-        # GROQ AI
-        # =============================
-        ai_response = requests.post(
-
-            "https://api.groq.com/openai/v1/chat/completions",
-
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
-
-            json={
-
-                "model": "llama-3.3-70b-versatile",
-
-                "messages": [
-
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a helpful WhatsApp customer support "
-                            "assistant for TechHubX Digital Solutions. "
-                            "Reply briefly and professionally."
-                        )
-                    },
-
-                    {
-                        "role": "user",
-                        "content": user_text
-                    }
-
-                ],
-
-                "max_completion_tokens": 150
-
-            },
-
-            timeout=30
-        )
-
-
-        # =============================
-        # GROQ RESPONSE
-        # =============================
-        ai_data = ai_response.json()
-
-        print(
-            "AI STATUS:",
-            ai_response.status_code,
-            flush=True
-        )
-
-        print(
-            "AI RESPONSE:",
-            ai_data,
-            flush=True
-        )
-
-
-        # =============================
-        # CHECK GROQ ERROR
-        # =============================
-        if ai_response.status_code != 200:
-
-            print(
-                "GROQ ERROR:",
-                ai_data,
-                flush=True
-            )
-
-            return "OK", 200
-
-
-        # =============================
-        # GET AI REPLY
-        # =============================
-        reply = ai_data["choices"][0]["message"]["content"]
-
-        print(
-            "AI REPLY:",
-            reply,
-            flush=True
-        )
-
-
-        # =============================
-        # SEND MESSAGE TO WHATSAPP
+        # SEND REPLY THROUGH META
         # =============================
         url = f"https://graph.facebook.com/v23.0/{PHONE_ID}/messages"
 
