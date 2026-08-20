@@ -4,25 +4,31 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-# =============================
-# META ENVIRONMENT VARIABLES
-# =============================
+
+# ==========================================
+# ENVIRONMENT VARIABLES
+# ==========================================
+
 META_TOKEN = os.getenv("META_ACCESS_TOKEN")
 PHONE_ID = os.getenv("META_PHONE_NUMBER_ID")
 VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
-# =============================
+# ==========================================
 # HOME
-# =============================
+# ==========================================
+
 @app.route("/", methods=["GET"])
 def home():
-    return "WhatsApp Bot is Live!", 200
+
+    return "WhatsApp AI Bot is Live!", 200
 
 
-# =============================
+# ==========================================
 # META WEBHOOK VERIFY
-# =============================
+# ==========================================
+
 @app.route("/webhook", methods=["GET"])
 def verify():
 
@@ -30,19 +36,23 @@ def verify():
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    print("WEBHOOK VERIFY:", flush=True)
+    print("WEBHOOK VERIFY REQUEST", flush=True)
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("WEBHOOK VERIFIED", flush=True)
+
+        print("WEBHOOK VERIFIED SUCCESSFULLY", flush=True)
+
         return challenge, 200
 
     print("WEBHOOK VERIFICATION FAILED", flush=True)
+
     return "Verification failed", 403
 
 
-# =============================
+# ==========================================
 # RECEIVE WHATSAPP MESSAGE
-# =============================
+# ==========================================
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
@@ -52,79 +62,232 @@ def webhook():
 
     try:
 
-        # -----------------------------
-        # GET WHATSAPP MESSAGE
-        # -----------------------------
+        # --------------------------------------
+        # GET MESSAGE
+        # --------------------------------------
+
         message = data["entry"][0]["changes"][0]["value"]["messages"][0]
 
         sender = message["from"]
 
-        user_text = message.get("text", {}).get("body", "")
+        user_text = message.get("text", {}).get("body", "").strip()
 
         print("USER:", user_text, flush=True)
 
 
-        # -----------------------------
-        # IGNORE NON-TEXT MESSAGES
-        # -----------------------------
+        # --------------------------------------
+        # IGNORE NON-TEXT MESSAGE
+        # --------------------------------------
+
         if not user_text:
+
             return "OK", 200
 
 
-        # =============================
-        # FIXED REPLY
-        # =============================
-        reply = "Hi 👋 Welcome to TechHubX Digital Solutions! How can we help you?"
+        # ======================================
+        # CHECK GROQ API KEY
+        # ======================================
+
+        if not GROQ_API_KEY:
+
+            print("ERROR: GROQ_API_KEY IS MISSING", flush=True)
+
+            return "OK", 200
 
 
-        print("REPLY:", reply, flush=True)
+        # ======================================
+        # SEND USER MESSAGE TO GROQ AI
+        # ======================================
+
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
 
 
-        # =============================
-        # SEND REPLY THROUGH META
-        # =============================
-        url = f"https://graph.facebook.com/v23.0/{PHONE_ID}/messages"
+        groq_headers = {
+
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+
+            "Content-Type": "application/json"
+
+        }
 
 
-        response = requests.post(
+        groq_data = {
 
-            url,
+            "model": "llama-3.3-70b-versatile",
 
-            headers={
-                "Authorization": f"Bearer {META_TOKEN}",
-                "Content-Type": "application/json"
-            },
+            "messages": [
 
-            json={
+                {
+                    "role": "system",
 
-                "messaging_product": "whatsapp",
+                    "content": (
+                        "You are a helpful WhatsApp customer support "
+                        "assistant for TechHubX Digital Solutions. "
 
-                "to": sender,
+                        "Answer customer questions clearly and "
+                        "professionally. "
 
-                "type": "text",
+                        "Keep replies short and useful. "
 
-                "text": {
-                    "body": reply
+                        "If the customer says hi, hello or hii, "
+                        "reply naturally and ask how you can help. "
+
+                        "Do not mention that you are an AI unless "
+                        "the customer asks."
+                    )
+                },
+
+                {
+                    "role": "user",
+
+                    "content": user_text
+
                 }
 
-            },
+            ],
+
+            "max_completion_tokens": 300,
+
+            "temperature": 0.5
+
+        }
+
+
+        print("SENDING MESSAGE TO GROQ...", flush=True)
+
+
+        ai_response = requests.post(
+
+            groq_url,
+
+            headers=groq_headers,
+
+            json=groq_data,
 
             timeout=30
+
         )
 
 
-        # =============================
-        # META RESPONSE
-        # =============================
+        # ======================================
+        # GROQ RESPONSE
+        # ======================================
+
         print(
-            "META STATUS:",
-            response.status_code,
+            "GROQ STATUS:",
+            ai_response.status_code,
             flush=True
         )
 
+
+        print(
+            "GROQ RESPONSE:",
+            ai_response.text,
+            flush=True
+        )
+
+
+        # ======================================
+        # CHECK GROQ ERROR
+        # ======================================
+
+        if ai_response.status_code != 200:
+
+            print(
+                "GROQ ERROR:",
+                ai_response.text,
+                flush=True
+            )
+
+            return "OK", 200
+
+
+        # ======================================
+        # GET AI RESPONSE TEXT
+        # ======================================
+
+        ai_data = ai_response.json()
+
+
+        reply = ai_data["choices"][0]["message"]["content"]
+
+
+        print(
+            "AI REPLY:",
+            reply,
+            flush=True
+        )
+
+
+        # ======================================
+        # SEND AI REPLY TO WHATSAPP
+        # ======================================
+
+        meta_url = (
+            f"https://graph.facebook.com/v23.0/"
+            f"{PHONE_ID}/messages"
+        )
+
+
+        meta_headers = {
+
+            "Authorization": f"Bearer {META_TOKEN}",
+
+            "Content-Type": "application/json"
+
+        }
+
+
+        meta_data = {
+
+            "messaging_product": "whatsapp",
+
+            "to": sender,
+
+            "type": "text",
+
+            "text": {
+
+                "body": reply
+
+            }
+
+        }
+
+
+        print(
+            "SENDING AI REPLY TO WHATSAPP...",
+            flush=True
+        )
+
+
+        meta_response = requests.post(
+
+            meta_url,
+
+            headers=meta_headers,
+
+            json=meta_data,
+
+            timeout=30
+
+        )
+
+
+        # ======================================
+        # META RESPONSE
+        # ======================================
+
+        print(
+            "META STATUS:",
+            meta_response.status_code,
+            flush=True
+        )
+
+
         print(
             "META RESPONSE:",
-            response.text,
+            meta_response.text,
             flush=True
         )
 
@@ -141,9 +304,10 @@ def webhook():
     return "OK", 200
 
 
-# =============================
-# RUN
-# =============================
+# ==========================================
+# RUN APPLICATION
+# ==========================================
+
 if __name__ == "__main__":
 
     port = int(
@@ -153,7 +317,11 @@ if __name__ == "__main__":
         )
     )
 
+
     app.run(
+
         host="0.0.0.0",
+
         port=port
+
     )
